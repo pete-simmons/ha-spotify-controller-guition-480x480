@@ -1,0 +1,324 @@
+substitutions:
+  spotify_entity: media_player.spotify_xxx # Replace with your HA media_player entity 
+
+  play: "\uF04B"
+  pause: "\uF04C"
+  prev: "\uF048"
+  next: "\uF051"
+
+esphome:
+  name: spotify_screen
+  platformio_options:
+    board_build.flash_mode: dio
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      COMPILER_OPTIMIZATION_SIZE: y
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: "y"
+      CONFIG_ESP32S3_DATA_CACHE_64KB: "y"
+      CONFIG_ESP32S3_DATA_CACHE_LINE_64B: "y"
+      CONFIG_SPIRAM_FETCH_INSTRUCTIONS: y
+      CONFIG_SPIRAM_RODATA: y
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+captive_portal:
+
+http_request:
+
+web_server:
+  port: 80
+
+sensor: 
+  - platform: homeassistant
+    id: spotify_media_title
+    entity_id: ${spotify_entity}
+    attribute: media_title
+    name: "Spotify Title"
+  - platform: homeassistant
+    id: spotify_media_artist
+    entity_id: ${spotify_entity}
+    attribute: media_artist
+    name: "Spotify Artist"
+    on_value:
+        then:
+          - lvgl.label.update:
+              id: spotify_playing
+              text:
+                format: "%s"
+                args: [ 'id(raw_spotify_artist).state + " - " + id(raw_spotify_media_title).state' ] 
+  - platform: homeassistant
+    id: spotify_media_album
+    entity_id: ${spotify_entity}
+    attribute: media_album_name
+    name: "Spotify Album"
+  - platform: homeassistant
+    id: spotify_media_state
+    entity_id: ${spotify_entity}
+    name: "Spotify State"
+
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+      entity_category: diagnostic
+    ssid:
+      name: "Connected SSID"
+      entity_category: diagnostic
+    mac_address:
+      name: "Mac Address"
+      entity_category: diagnostic
+  - platform: homeassistant
+    id: raw_spotify_artist
+    entity_id: ${spotify_entity}
+    attribute: media_artist
+  - platform: homeassistant
+    id: raw_spotify_media_title
+    entity_id: ${spotify_entity}
+    attribute: media_title
+  - platform: homeassistant
+    id: spotify_state
+    entity_id: ${spotify_entity}
+  - platform: template
+    id: now_playing
+    name: "Now Playing"
+    lambda: |-
+      if (id(raw_spotify_artist).state.empty()) {
+        return {"Nothing Playing"};
+      } else {
+        return id(raw_spotify_artist).state + " - " + id(raw_spotify_media_title).state;
+      }
+    on_value:
+        then:
+          - lvgl.label.update:
+              id: spotify_playing
+              text:
+                format: "%s"
+                args: [ 'id(raw_spotify_artist).state + " - " + id(raw_spotify_media_title).state' ]
+
+lvgl:
+  displays:
+    - my_display
+  touchscreens:
+    - my_touchscreen
+  on_idle:
+    - timeout: 10s
+      then:
+        - logger.log: idle timeout
+        - if:
+            condition:
+              lvgl.is_idle:
+                timeout: 5s
+            then:
+              - logger.log: LVGL is idle
+    - timeout: 15s
+      then:
+        - logger.log: idle 15s timeout
+
+      #- lvgl.pause:
+      #- light.turn_off:
+      #    id: display_backlight
+      #    transition_length: 5s
+
+  
+  gradients:
+    - id: green_grad
+      direction: ver
+      dither: none
+      stops:
+        - color: 0x44C767
+          position: 0
+        - color: 0x5CBF2A
+          position: 255
+
+  theme:
+    button:
+      scroll_on_focus: true
+      border_width: 0
+      outline_pad: 6
+      width: 100
+      height: 100
+      bg_grad: green_grad
+      radius: 50
+      pressed:
+        border_color: 0xFF0000
+
+  page_wrap: true
+  pages:
+    - id: main_page
+      width: 100%
+      bg_color: 0x000000
+      bg_opa: cover
+      widgets:
+        obj:
+          align: center
+          width: 480
+          height: 480
+          bg_color: 0x000000
+          bg_opa: cover
+          layout:
+            type: flex
+            pad_row: 4
+            pad_column: 4px
+            flex_align_main: center
+            flex_align_cross: start
+            flex_align_track: center
+          widgets:
+            - label:
+                long_mode: wrap
+                align: center
+                id: spotify_playing
+                text: ""
+                text_color: 0xFFFFFF
+                text_align: center
+                width: 460
+                text_font: montserrat_20
+                pad_bottom: 20
+            - button:
+                id: prev
+                widgets:
+                - label:
+                    id: prev_button
+                    text_font: montserrat_30
+                    align: center
+                    text: $prev
+                on_click: 
+                  homeassistant.service:
+                    service: media_player.media_previous_track
+                    data:
+                      entity_id: ${spotify_entity}
+            - button:
+                id: playpause
+                widgets:
+                - label:
+                    id: play_pause_button
+                    text_font: montserrat_30
+                    align: center
+                    text: $play
+                on_click: 
+                  homeassistant.service:
+                    service: media_player.media_play_pause
+                    data:
+                      entity_id: ${spotify_entity}
+            - button:
+                id: next
+                widgets:
+                - label:
+                    id: next_button
+                    text_font: montserrat_30
+                    align: center
+                    text: $next
+                on_click: 
+                  homeassistant.service:
+                    service: media_player.media_next_track
+                    data:
+                      entity_id: ${spotify_entity}                      
+
+interval:
+  - interval: 500ms
+    then:
+      - if:
+          condition:
+            lambda: |-
+              return id(spotify_state).state == "playing";
+          then:
+            - logger.log: "playing"
+            - lambda: |- 
+                lv_label_set_text(id(play_pause_button), "\uF04C");   
+                lv_label_set_text(id(spotify_playing), id(now_playing).state.c_str()); 
+          else:
+            - logger.log: "not playing"
+            - lambda: |-
+                lv_label_set_text(id(play_pause_button), "\uF04B"); 
+                lv_label_set_text(id(spotify_playing), "Nothing Playing");
+               
+
+output:
+  - platform: ledc
+    pin: GPIO38
+    id: GPIO38
+    frequency: 100Hz
+
+light:
+  - platform: monochromatic
+    output: GPIO38
+    name: Backlight
+    id: backlight
+    restore_mode: ALWAYS_ON
+
+i2c:
+  - id: bus_a
+    sda: GPIO19
+    scl: GPIO45
+
+touchscreen:
+  platform: gt911
+  transform:
+    mirror_x: false
+    mirror_y: false
+  id: my_touchscreen
+  display: my_display
+
+
+spi:
+  - id: lcd_spi
+    clk_pin: GPIO48
+    mosi_pin: GPIO47
+
+display:
+  - platform: st7701s
+    id: my_display
+    update_interval: never
+    auto_clear_enabled: False
+    spi_mode: MODE3
+    data_rate: 2MHz
+    color_order: RGB
+    invert_colors: False
+    dimensions:
+      width: 480
+      height: 480
+    cs_pin: 39
+    de_pin: 18
+    hsync_pin: 16
+    vsync_pin: 17
+    pclk_pin: 21
+    pclk_frequency: 12MHz
+    pclk_inverted: False
+    hsync_pulse_width: 8
+    hsync_front_porch: 10
+    hsync_back_porch: 20
+    vsync_pulse_width: 8
+    vsync_front_porch: 10
+    vsync_back_porch: 10
+    init_sequence:
+      - 1
+      - [0xFF, 0x77, 0x01, 0x00, 0x00, 0x10]
+      - [0xCD, 0x00]
+    data_pins:
+      red:
+        - 11 #r1
+        - 12 #r2
+        - 13 #r3
+        - 14 #r4
+        - 0 #r5
+      green:
+        - 8 #g0
+        - 20 #g1
+        - 3 #g2
+        - 46 #g3
+        - 9 #g4
+        - 10 #g5
+      blue:
+        - 4 #b1
+        - 5 #b2
+        - 6 #b3
+        - 7 #b4
+        - 15 #b5
