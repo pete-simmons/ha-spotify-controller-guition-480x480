@@ -8,8 +8,17 @@ Currently artwork is not displayed due to lack of support for JPG images in LVGL
 Update the substitution at the top of the YAML with your entity ID and you should be good to go.
 
 
+## Installation
 
+Install my-project via ESPHome either in your HA setup or via CLI, you will need to add your wifi/ota/api details to the yaml.
 
+You will also need to replace the spotify_entity with you HA Entity
+
+```bash
+  substitutions:
+    spotify_entity: media_player.spotify_xxx # Replace with your HA media_player entity 
+```
+    
 ## Contributing
 
 Contributions are always welcome!
