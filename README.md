@@ -30,3 +30,8 @@ This has only been tested with my setup, so feel free to open an issue if you co
 
 ![App in action](https://community-assets.home-assistant.io/optimized/4X/9/1/7/9172240461046f8b33577e22274254cb1f0a0832_2_445x500.jpeg)
 
+## Known Issues
+
+- There is quite a large delay between the HA Spotify entity updating with the current track, in turn this leads to a delay with the screen updating
+- Artwork cannot be displayed due to no JPG support in online_image
+  - Open feature request here: https://github.com/esphome/feature-requests/issues/3028 
